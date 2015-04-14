@@ -1,0 +1,3 @@
+#!/bin/bash
+./server 49500 tcp 5
+
