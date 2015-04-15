@@ -1,7 +1,7 @@
 #ifndef PROTOCOL_H_
 #define PROTOCOL_H_
 
-#define MTU 1500		//максимальный размер передаваемых данных
+#define MTU 15		//максимальный размер передаваемых данных
 #define TIMEOUT 30		//тайм-аут в секундах
 
 #define PROTO_NAME "NAS_SRV_EMULATOR"	//имя протокола
@@ -31,7 +31,7 @@ extern const char crcMissmatchNotification[];
 
 //структура, описывающая соединение и его параметры
 typedef struct {
-	char protoName[10];					//имя протокола
+	char protoName[20];					//имя протокола
 	char protoVersion[5];				//версия протокола
 	char length[5];						//длина сообщения
 	int clientSockFD;					//файловый дескриптор клиентского сокета
@@ -58,5 +58,7 @@ void Assembler(int sockFD, char *buffer, struct sockaddr *clientAddr, socklen_t 
 void isMessageEntire(connection *connListItem, char *buffer);
 
 void Accumulator(connection *connListItem, char *buffer);
+
+void handleErr(const char *text, short errCode);
 
 #endif /* PROTOCOL_H_ */

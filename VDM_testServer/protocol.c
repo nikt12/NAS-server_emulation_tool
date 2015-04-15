@@ -20,7 +20,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include "protocol.h"
-#include "servFunctions.h"
+//#include "servFunctions.h"
 #include "crc.h"
 
 const char segmentationWarning[] = "SEGMENTATED_MESSAGES_WILL_COME:";	//формат предупреждающего сообщения
@@ -33,12 +33,13 @@ const char firstSrvResponse[] = " (response from service A)";
 const char secondSrvResponse[] = " (response from service B)";
 
 const char wrongSrvNotification[] = "You have requested a non-existent service.";
-const char connStructOverflowNotification[] = "No more place for new clients. Please, try again later.";
+const char connStructOverflowNotification[] = "No more place for new clients.";
 const char crcMissmatchNotification[] = "Checksum missmatch.";
 
 void timeoutCheck(connection *connList, struct epoll_event *evList) {
 	time_t timeout;
 	int j = 0;
+
 	for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
 		timeout = time(NULL) - connList[j].timeout;
 		if((timeout > TIMEOUT) && (connList[j].clientHostName[0] != '\0')) {
@@ -168,10 +169,10 @@ int Divider(int sockFD, char *buffer, struct sockaddr_in *serverAddr, socklen_t 
 	fdSetBlocking(sockFD, 1);
 
 	//отправляем предупреждающее сообщение
-	sendto(sockFD, segWarning, strlen(segWarning), 0, serverAddr, serverAddrSize);
+	sendto(sockFD, segWarning, strlen(segWarning), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 
 	//ждем подтверждения от сервера
-	if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
+	if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
 		memset(&tempBuffer, 0, sizeof(tempBuffer));
 		//цикл сегментирования исходной строки
 		for(j = 0; j < segNum; j++)
@@ -180,9 +181,9 @@ int Divider(int sockFD, char *buffer, struct sockaddr_in *serverAddr, socklen_t 
 		//цикл обмена данными с сервером
 		for(j = 0; j < segNum; j++) {
 			//отправляем очередной сегмент
-			sendto(sockFD, segArray[j], strlen(segArray[j]), 0, serverAddr, serverAddrSize);
+			sendto(sockFD, segArray[j], strlen(segArray[j]), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 			//ждем подтверждения
-			if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
+			if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
 				memset(&tempBuffer, 0, sizeof(tempBuffer));
 				//инкрементируем счетчик отправленных сегментов в случае успеха
 				done++;
@@ -290,4 +291,10 @@ void Accumulator(connection *connListItem, char *buffer) {
 		strcat(connListItem->storageBuffer, buffer);
 		connListItem->timeout = time(NULL);
 	}
+}
+
+void handleErr(const char *text, short errCode) {
+	perror(text);
+	if((abs(errCode) < 10))
+		exit(EXIT_FAILURE);
 }

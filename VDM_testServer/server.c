@@ -16,88 +16,99 @@
 #include "protocol.h"
 #include "servFunctions.h"
 
-#define EPOLL_QUEUE_LEN 100		//длина очереди событий epoll
-#define MAX_EPOLL_EVENTS 100	//максимальное число событий epoll за одну итерацию
-#define EPOLL_RUN_TIMEOUT 5		//таймаут ожидания событий (-1 соответствует ожиданию до первого наступившего события)
+#define EPOLL_QUEUE_LEN 100
+#define MAX_EPOLL_EVENTS 100
+#define EPOLL_RUN_TIMEOUT 5
 
 void eventLoopTCP(connection *connList, int listeningSocket);
 
 void eventLoopUDP(connection *connList, int serverSock);
 
 int main(int argc, char *argv[]) {
-	int listeningSocket;										//дескриптор сокета сервера
-	connection connList[NUM_OF_CONNECTIONS];			//массив структур с данными о клиентах и соединений с ними
+	int listeningSocket, result;
+	connection connList[NUM_OF_CONNECTIONS];
 
-	//инициализируем используемые строки и структуры нулями
 	memset(&connList, 0, sizeof(connList));
 
-	//проверяем, получено ли необходимое количество аргументов
 	if (argc == 4) {
-		int result = argCheck(argv[1], argv[2]);
+		result = checkArgs(argv[1], argv[2]);
 		if(result != 0)
-			perror("wrong args");
-		//создаем сокет сервера и выполняем его привязку с переводом в режим прослушивания
+			handleErr("Wrong arguments!", result);
 		listeningSocket = createServerSocket(argv[1], argv[2], argv[3]);
-		//проверяем значение дескриптора сокета
-		if (listeningSocket < 0)
-			return -1;
+		if(strcmp(argv[2], "tcp") == 0) {
+			printf("Waiting for connections... Listening on %s:%s...\n", argv[1], argv[2]);
+			eventLoopTCP(connList, listeningSocket);
+		}
 		else {
-			if(strcmp(argv[2], "tcp") == 0)
-				eventLoopTCP(connList, listeningSocket);
-			else
-				eventLoopUDP(connList, listeningSocket);
+			printf("Using UDP protocol. Waiting for connections (%s:%s)...\n", argv[1], argv[2]);
+			eventLoopUDP(connList, listeningSocket);
 		}
 	}
 	else
-		//если введено неверное количество аргументов, выводим правильный формат запуска программы
 		printf("Usage: %s port transport query_length\n", argv[0]);
 	return 0;
 }
 
 void eventLoopTCP(connection *connList, int listeningSocket) {
-	int i;
-	printf("Сервер вошел в режим прослушивания сокета. Ожидание подключений...\n");
-	int epollFD = epoll_create(EPOLL_QUEUE_LEN);			//создаем epoll-инстанс
-	struct epoll_event event;								//создаем структуру событий epoll
-	struct epoll_event evList[MAX_EPOLL_EVENTS];		//создаем массив структур событий epoll
-	event.events = EPOLLIN;								//указываем маску интересующих нас событий
-	event.data.fd = listeningSocket;							//указываем файловый дескриптор для мониторинга событий
-	epoll_ctl(epollFD, EPOLL_CTL_ADD, listeningSocket, &event);	//начинаем мониторинг с заданными параметрами
+	int i, readyFDs, result;
+	int epollFD = epoll_create(EPOLL_QUEUE_LEN);
+	struct epoll_event event;
+	struct epoll_event evList[MAX_EPOLL_EVENTS];
 
-	//цикл мониторинга событий epoll
+	event.events = EPOLLIN;
+	event.data.fd = listeningSocket;
+
+	epoll_ctl(epollFD, EPOLL_CTL_ADD, listeningSocket, &event);
+
 	while (1) {
-		//ожидаем событий, в nfds будет помещено число готовых файловых дескрипторов
-		int readyFDs = epoll_wait(epollFD, evList, MAX_EPOLL_EVENTS, EPOLL_RUN_TIMEOUT);
+		readyFDs = epoll_wait(epollFD, evList, MAX_EPOLL_EVENTS, EPOLL_RUN_TIMEOUT);
 
 		timeoutCheck(connList, evList);
 
-		//цикл проверки готовых файловых дескрипторов
-		for(i = 0; i < readyFDs; i++) // add EPOLLHUP, EPOLLERR
-			//проверяем, на каком дескрипторе произошло событие
-			if (evList[i].data.fd == listeningSocket)
-				acceptNewConnection(listeningSocket, connList, epollFD, &event);
-			else
-				dataExchangeTCP(connList, &evList[i]);
+		for(i = 0; i < readyFDs; i++) { // add EPOLLHUP, EPOLLERR
+			if (evList[i].data.fd == listeningSocket) {
+				while(1) {
+					result = acceptNewConnection(listeningSocket, connList, epollFD, &event);
+					if(result < 0)
+						handleErr("Exchange", result);
+					break;
+				}
+			}
+			else {
+				while(1) {
+					result = dataExchangeTCP(connList, &evList[i]);
+					if(result < 0)
+						handleErr("Exchange", result);
+					break;
+				}
+			}
+		}
 	}
 }
 
 void eventLoopUDP(connection *connList, int serverSock) {
-	int i;
-	struct epoll_event event;								//создаем структуру событий epoll
-	struct epoll_event evList[MAX_EPOLL_EVENTS];		//создаем массив структур событий epoll
+	int i, epollFD, readyFDs, result;
+	struct epoll_event event;
+	struct epoll_event evList[MAX_EPOLL_EVENTS];
 
-	printf("Работа про протоколу UDP. Ожидание подключений...\n");
-	int epfd = epoll_create(EPOLL_QUEUE_LEN);			//создаем epoll-инстанс
-	event.events = EPOLLIN;								//указываем маску интересующих нас событий
-	event.data.fd = serverSock;							//указываем файловый дескриптор для мониторинга событий
-	epoll_ctl(epfd, EPOLL_CTL_ADD, serverSock, &event);	//начинаем мониторинг с заданными параметрами
+	epollFD = epoll_create(EPOLL_QUEUE_LEN);
+
+	event.events = EPOLLIN;
+	event.data.fd = serverSock;
+
+	epoll_ctl(epollFD, EPOLL_CTL_ADD, serverSock, &event);
 
 	while(1) {
-		//ожидаем событий, в nfds будет помещено число готовых файловых дескрипторов
-		int readyFDs = epoll_wait(epfd, evList, MAX_EPOLL_EVENTS, EPOLL_RUN_TIMEOUT);
+		readyFDs = epoll_wait(epollFD, evList, MAX_EPOLL_EVENTS, EPOLL_RUN_TIMEOUT);
 
 		for(i = 0; i < readyFDs; i++)
-			if(evList[i].events & EPOLLIN)
-				dataExchangeUDP(serverSock, connList, &evList[i]);
+			if(evList[i].events & EPOLLIN) {	//add EPOLLERR...
+				while(1) {
+					result = dataExchangeUDP(serverSock, connList, &evList[i]);
+					if(result < 0)
+						handleErr("Exchange", result);
+					break;
+				}
+			}
 	}
 }

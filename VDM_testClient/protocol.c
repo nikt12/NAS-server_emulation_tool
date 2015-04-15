@@ -168,10 +168,10 @@ int Divider(int sockFD, char *buffer, struct sockaddr_in *serverAddr, socklen_t 
 	fdSetBlocking(sockFD, 1);
 
 	//отправляем предупреждающее сообщение
-	sendto(sockFD, segWarning, strlen(segWarning), 0, serverAddr, serverAddrSize);
+	sendto(sockFD, segWarning, strlen(segWarning), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 
 	//ждем подтверждения от сервера
-	if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
+	if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
 		memset(&tempBuffer, 0, sizeof(tempBuffer));
 		//цикл сегментирования исходной строки
 		for(j = 0; j < segNum; j++)
@@ -180,9 +180,9 @@ int Divider(int sockFD, char *buffer, struct sockaddr_in *serverAddr, socklen_t 
 		//цикл обмена данными с сервером
 		for(j = 0; j < segNum; j++) {
 			//отправляем очередной сегмент
-			sendto(sockFD, segArray[j], strlen(segArray[j]), 0, serverAddr, serverAddrSize);
+			sendto(sockFD, segArray[j], strlen(segArray[j]), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 			//ждем подтверждения
-			if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
+			if((recvfrom(sockFD, tempBuffer, sizeof(tempBuffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize) > 0) && (strcmp(tempBuffer, ACK) == 0)) {
 				memset(&tempBuffer, 0, sizeof(tempBuffer));
 				//инкрементируем счетчик отправленных сегментов в случае успеха
 				done++;

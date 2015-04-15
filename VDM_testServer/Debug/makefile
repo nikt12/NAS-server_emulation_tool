@@ -22,19 +22,19 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: TestServer
+all: VDM_testServer
 
 # Tool invocations
-TestServer: $(OBJS) $(USER_OBJS)
+VDM_testServer: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc  -o "TestServer" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc  -o "VDM_testServer" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) TestServer
+	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) VDM_testServer
 	-@echo ' '
 
 .PHONY: all clean dependents

@@ -27,6 +27,10 @@
 
 int errno;
 
+void errTableInit() {
+}
+
+
 void strToLower(char *str) {
 	int i;
 	for(i = 0; str[i]; i++){
@@ -34,12 +38,11 @@ void strToLower(char *str) {
 	}
 }
 
-int argCheck(char *port, char *transport) {
+int checkArgs(char *port, char *transport) {
 	strToLower(transport);
-	if((atoi(port) < 1024) || (atoi(port) > 65535))
-		return -1;
-	if((strcmp(transport, "udp") != 0) && (strcmp(transport, "tcp") != 0))
+	if((atoi(port) < 1024) || (atoi(port) > 65535) || ((strcmp(transport, "udp") != 0) && (strcmp(transport, "tcp") != 0))) {
 		return -2;
+	}
 	return 0;
 }
 
@@ -48,12 +51,10 @@ int argCheck(char *port, char *transport) {
 //fd - файловый дескриптор сокета
 //blocking - режим работы (0 - неблокирующий, 1 - блокирующий)
 int fdSetBlocking(int fd, int blocking) {
-    //сохраняем текущие флаги
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1)
         return 0;
 
-    //устанавливаем режим работы
     if (blocking)
         flags &= ~O_NONBLOCK;
     else
@@ -68,19 +69,16 @@ int fdSetBlocking(int fd, int blocking) {
 //qlen - длина очереди на подключение к сокету
 int createServerSocket(const char *port, const char *transport, const char *qlen) {
 	struct sockaddr_in sin;			//структура IP-адреса
-	int s, type, proto, q_len, optval = 1;				//дескриптор и тип сокета
+	int s, result, type, proto, q_len, optval = 1;				//дескриптор и тип сокета
 
 	q_len = atoi(qlen);
-	//обнуляем структуру адреса
+
 	memset(&sin, 0, sizeof(sin));
-	//указываем тип адреса
+
 	sin.sin_family = AF_INET;
-	//указываем в качестве адреса шаблон INADDR_ANY, т.е. все сетевые интерфейсы
 	sin.sin_addr.s_addr = INADDR_ANY;
-	//конвертируем номер порта из пользовательского порядка байт в сетевой
 	sin.sin_port = htons((unsigned short)atoi(port));
 
-	//используем имя протокола для определения типа сокета
 	if(strcmp(transport, "udp") == 0) {
 		type = SOCK_DGRAM;
 		proto = IPPROTO_UDP;
@@ -90,91 +88,83 @@ int createServerSocket(const char *port, const char *transport, const char *qlen
 		proto = IPPROTO_TCP;
 	}
 
-	//вызываем функцию создания сокета
 	s = socket(PF_INET, type, proto);
+	if (s < 0)
+		handleErr("Socket", s);
 
-	//переводим созданный сокет в неблокирующий режим для корректной работы epoll
 	fdSetBlocking(s, 0);
+	if (s < 0)
+		handleErr("Socket", s);
 
-	//проверяем правильность создания
-	if (s < 0) {
-		printf("Ошибка создания сокета: %s.\n", strerror(errno));
-		return -1;
+	result = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+	if(result < 0)
+		handleErr("Set socket option", result);
+
+	result = bind(s, (struct sockaddr *)&sin, sizeof(sin));
+	if(result < 0)
+		handleErr("Bind", result);
+
+	if(type == SOCK_STREAM) {
+		result = listen(s, q_len);
+		if(result < 0)
+			handleErr("Listen", result);
 	}
-
-	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-
-	//привязка сокета с проверкой результата
-	if(bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-		printf("Ошибка связывания сокета: %s.\n", strerror(errno));
-		return -1;
-	}
-
-	if(type == SOCK_STREAM)
-		//запуск прослушивания с проверкой результата
-		if (listen(s, q_len) < 0) {
-			printf("Ошибка перевода сокета в режим прослушивания: %s.\n", strerror(errno));
-			return -1;
-		}
 	return s;
 }
 
-void acceptNewConnection(int listeningSocket, connection *connList, int epollFD, struct epoll_event *event) {
-	while(1) {
-		int clientSocket;
-		char clientName[32];
-		struct sockaddr clientAddr;
-		socklen_t clientAddrSize = sizeof(clientAddr);
+int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, struct epoll_event *event) {
+	int clientSocket;
+	char clientName[32];
+	struct sockaddr clientAddr;
+	socklen_t clientAddrSize = sizeof(clientAddr);
 
-		memset(&clientName, 0, sizeof(clientName));
-		memset(&clientAddr, 0, sizeof(clientAddr));
+	memset(&clientName, 0, sizeof(clientName));
+	memset(&clientAddr, 0, sizeof(clientAddr));
 
-		//принимаем подключение и проверяем результат
-		clientSocket = accept(listeningSocket, &clientAddr, &clientAddrSize);
-		if (clientSocket == -1) {
-			if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
-				break;
-			else {
-				perror("accept");
+	clientSocket = accept(listeningSocket, &clientAddr, &clientAddrSize);
+	if (clientSocket < 0) {
+		if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+			return 0;
+		else
+			return -6;
+	}
+	else {
+		int j;
+		for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
+			if(connList[j].clientHostName[0] == '\0') {
+				fdSetBlocking(clientSocket, 0);
+				connList[j].clientSockFD = clientSocket;
+				getnameinfo(&clientAddr, clientAddrSize, clientName, sizeof(clientName), NULL, 0, 0);
+				sprintf(connList[j].clientHostName, "%s", clientName);
+				connList[j].timeout = time(NULL);
+				event->data.fd = clientSocket;
+				event->events = EPOLLIN;
+				epoll_ctl(epollFD, EPOLL_CTL_ADD, clientSocket, event);
+				printf("Accepted connection on descriptor %d (hostname: %s)!\n", clientSocket, clientName);
 				break;
 			}
-		}
-		else {
-			int j;
-			for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
-				if(connList[j].clientHostName[0] == '\0') {
-					fdSetBlocking(clientSocket, 0);
-					connList[j].clientSockFD = clientSocket;
-					getnameinfo(&clientAddr, clientAddrSize, clientName, sizeof(clientName), NULL, 0, 0);
-					sprintf(connList[j].clientHostName, "%s", clientName);
-					connList[j].timeout = time(NULL);
-					event->data.fd = clientSocket;
-					event->events = EPOLLIN;
-					epoll_ctl(epollFD, EPOLL_CTL_ADD, clientSocket, event);
-					printf("Accepted connection on descriptor %d (hostname: %s)!\n", clientSocket, clientName);
-					break;
+			else
+				if(j == NUM_OF_CONNECTIONS-1) {
+					write(clientSocket, connStructOverflowNotification, strlen(connStructOverflowNotification));
+					return -7;
 				}
-				else
-					if(j == NUM_OF_CONNECTIONS-1) {
-						printf("%s\n", connStructOverflowNotification);
-						write(clientSocket, connStructOverflowNotification, strlen(connStructOverflowNotification));
-					}
-			}
-			memset(&clientName, 0, sizeof(clientName));
 		}
+		return clientSocket;
 	}
 }
 
 int identifySenderTCP(connection *connList, struct epoll_event *evListItem) {
-	int i, n = -1;
+	int i, n = -8;
 	for (i = 0; i < NUM_OF_CONNECTIONS; i++)
-		if (evListItem->data.fd == connList[i].clientSockFD)
+		if (evListItem->data.fd == connList[i].clientSockFD) {
 			n = i;
+			break;
+		}
 	return n;
 }
 
 int identifySenderUDP(connection *connList, char *buffer) {
-	int i, k, n = -1;
+	int i, k, n = -8;
 	connection tempConn[1];
 	memset(&tempConn, 0, sizeof(tempConn));
 	deSerializer(&tempConn[0], buffer);
@@ -218,184 +208,185 @@ int readingInParts(connection *connListItem, char *buffer) {
 }
 
 int serverChecksumCalculateAndCompare(connection *connListItem, struct epoll_event *evListItem, char *buffer, char *crcServerResult) {
+	unsigned int CRC;
 	char CRCmessage[BUFFERSIZE];
 	memset(&CRCmessage, 0, sizeof(CRCmessage));
 
-	//подсчитываем контрольную сумму текста присланного нам сообщения и помещаем ее в crcServerResult
 	strncpy(CRCmessage, buffer, strlen(buffer) - 8);
-	unsigned int CRC = crcSlow((unsigned char *)CRCmessage, strlen(CRCmessage));
+	CRC = crcSlow((unsigned char *)CRCmessage, strlen(CRCmessage));
 	sprintf(crcServerResult, "%X", CRC);
 
 	if (strcmp(connListItem->messageCRC32, crcServerResult) == 0)
 		return 0;
+	else
+		return -10;
+}
+
+int firstServiceTCP(connection *connListItem, struct epoll_event *evListItem, char *buffer) {
+	int result;
+	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
+	strcat(connListItem->messageText, firstSrvResponse);
+	Serializer(connListItem, buffer);
+	result = write(evListItem->data.fd, buffer, strlen(buffer));
+	if(result < 0)
+		return -12;
+	return result;
+}
+
+int firstServiceUDP(int serverSock, connection *connListItem, struct sockaddr *clientAddr, socklen_t clientAddrSize, char *buffer) {
+	int result;
+	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
+	strcat(connListItem->messageText, firstSrvResponse);
+	Serializer(connListItem, buffer);
+	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
+	if(result < 0)
+		return -12;
+	return result;
+}
+
+int secondServiceTCP(connection *connListItem, struct epoll_event *evListItem, char *buffer) {
+	int result;
+	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
+	strcat(connListItem->messageText, secondSrvResponse);
+	Serializer(connListItem, buffer);
+	result = write(evListItem->data.fd, buffer, strlen(buffer));
+	if(result < 0)
+		return -12;
+	return result;
+}
+
+int secondServiceUDP(int serverSock, connection *connListItem, struct sockaddr *clientAddr, socklen_t clientAddrSize, char *buffer) {
+	int result;
+	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
+	strcat(connListItem->messageText, secondSrvResponse);
+	Serializer(connListItem, buffer);
+	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
+	if(result < 0)
+		return -12;
+	return result;
+}
+
+int dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
+	int n = identifySenderTCP(connList, evListItem);
+	if(n < 0)
+		return n;
+
+	char buffer[BUFFERSIZE];
+	char crcServerResult[CRC32SIZE];
+
+	memset(&buffer, 0, sizeof(buffer));
+	memset(&crcServerResult, 0, sizeof(crcServerResult));
+
+	int result = read(evListItem->data.fd, buffer, sizeof(buffer));
+	if (result == -1) {
+		if(errno != EAGAIN)
+			return -9;
+		return 0;
+	}
+	if (result == 0) {
+		printf("Client \"%s\" (at %s) has closed the connection.\n", connList[n].clientNickName, connList[n].clientHostName);
+		close(evListItem->data.fd);
+		memset(&connList[n], 0, sizeof(connList[n]));
+		return 0;
+	}
+
+	result = readingInParts(&connList[n], buffer);		//fix reading in parts
+	if(result == 0)
+		return 0;
+
+	deSerializer(&connList[n], buffer);
+
+	result = serverChecksumCalculateAndCompare(&connList[n], evListItem, buffer, crcServerResult); //!!!!!!!!!!!
+
+	memset(&buffer, 0, sizeof(buffer));
+
+	if (result == 0) {
+		connList[n].timeout = time(NULL);
+		if(strcmp(connList[n].serviceName, firstServiceName) == 0) {
+			result = firstServiceTCP(&connList[n], evListItem, buffer);
+			if(result < 0)
+				return result;
+		}
+		else if(strcmp(connList[n].serviceName, secondServiceName) == 0) {
+			result = secondServiceTCP(&connList[n], evListItem, buffer);
+			if(result < 0)
+				return result;
+		}
+		else {
+			write(evListItem->data.fd, wrongSrvNotification, strlen(wrongSrvNotification)+1);
+			close(evListItem->data.fd);
+			memset(&connList[n], 0, sizeof(connList[n]));
+			return -11;
+		}
+	}
 	else {
 		write(evListItem->data.fd, crcMissmatchNotification, strlen(crcMissmatchNotification));
-		return -1;
+		return result;
 	}
+
+	memset(&connList[n].messageText, 0, sizeof(connList[n].messageText));
+	memset(&connList[n].messageCRC32, 0, sizeof(connList[n].messageCRC32));
+	memset(&connList[n].length, 0, sizeof(connList[n].length));
+	return 0;
 }
 
-void firstServiceTCP(connection *connListItem, struct epoll_event *evListItem) {
-	strcat(connListItem->messageText, firstSrvResponse);
-	write(evListItem->data.fd, connListItem->messageText, strlen(connListItem->messageText));
-}
+int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *evListItem) { //разобраться, что лучше использовать: evListItem or serverSocket
+	int n = -1, result;
+	struct sockaddr clientAddr;
+	socklen_t clientAddrSize = sizeof(clientAddr);
+	char buffer[BUFFERSIZE];
+	char crcServerResult[CRC32SIZE];
+	char clientName[32];
 
-void firstServiceUDP(int serverSock, connection *connListItem, struct sockaddr *clientAddr, socklen_t clientAddrSize) {
-	strcat(connListItem->messageText, firstSrvResponse);
-	int result = sendto(serverSock, connListItem->messageText, strlen(connListItem->messageText), 0, clientAddr, clientAddrSize);
-	if(result == -1)
-		perror("send");
-}
+	memset(&buffer, 0, sizeof(buffer));
+	memset(&crcServerResult, 0, sizeof(crcServerResult));
+	memset(&clientAddr, 0, sizeof(clientAddr));
+	memset(&clientName, 0, sizeof(clientName));
 
-void secondServiceTCP(connection *connListItem, struct epoll_event *evListItem) {
-	strcat(connListItem->messageText, secondSrvResponse);
-	write(evListItem->data.fd, connListItem->messageText, strlen(connListItem->messageText));
-}
+	result = recvfrom(serverSock, buffer, sizeof(buffer), 0, &clientAddr, &clientAddrSize);
+	getnameinfo(&clientAddr, clientAddrSize, clientName, sizeof(clientName), NULL, 0, 0);
+	if (result == -1) {
+		if(errno != EAGAIN)
+			return -9;
+		return 0;
+	}
 
-void secondServiceUDP(int serverSock, connection *connListItem, struct sockaddr *clientAddr, socklen_t clientAddrSize) {
-	strcat(connListItem->messageText, secondSrvResponse);
-	sendto(serverSock, connListItem->messageText, strlen(connListItem->messageText), 0, clientAddr, clientAddrSize);
-}
+	if(strncmp(buffer, segmentationWarning, strlen(segmentationWarning)) == 0) {
+		Assembler(serverSock, buffer, &clientAddr, clientAddrSize);
+	}
 
-void wrongServiceRequestedTCP(connection *connListItem, struct epoll_event *evListItem) {
-	write(evListItem->data.fd, wrongSrvNotification, strlen(wrongSrvNotification)+1);
-	printf("%s (%s) requested a non-existent service.\n", connListItem->clientNickName, connListItem->clientHostName);
-	close(evListItem->data.fd);
-}
+	n = identifySenderUDP(connList, buffer);
+	if(n < 0)
+		return n;
 
-void wrongServiceRequestedUDP(int serverSock, connection *connListItem, struct sockaddr *clientAddr, socklen_t clientAddrSize) {
-	sendto(serverSock, wrongSrvNotification, strlen(wrongSrvNotification)+1, 0, clientAddr, clientAddrSize);
-	printf("%s (%s) requested a non-existent service.\n", connListItem->clientNickName, connListItem->clientHostName);
-}
+	result = serverChecksumCalculateAndCompare(&connList[n], evListItem, buffer, crcServerResult);
 
-void dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
-	while(1) {
-		int n = identifySenderTCP(connList, evListItem);
+	memset(&buffer, 0, sizeof(buffer));
 
-		char buffer[BUFFERSIZE];
-		char crcServerResult[CRC32SIZE];
-
-		memset(&buffer, 0, sizeof(buffer));
-		memset(&crcServerResult, 0, sizeof(crcServerResult));
-
-		//читаем полученные данные из сокета
-		int result = read(evListItem->data.fd, buffer, sizeof(buffer));
-		if (result == -1) {
-			if(errno != EAGAIN)
-				perror("read");
-			break;
+	if (result == 0) {
+		if(strcmp(connList[n].serviceName, firstServiceName) == 0) {
+			result = firstServiceUDP(serverSock, &connList[n], &clientAddr, clientAddrSize, buffer);
+			if(result < 0)
+				return result;
 		}
-		else if (result == 0) {
-			//похоже, что клиент отключился
-			printf("Client \"%s\" (at %s) has closed the connection.\n", connList[n].clientNickName, connList[n].clientHostName);
-			close(evListItem->data.fd);						//исключаем связанный с ним дескриптор из epoll-инстанс
-			memset(&connList[n], 0, sizeof(connList[n]));	//удаляем информацию об этом клиенте
-			break;
-		}
-
-		result = readingInParts(&connList[n], buffer);
-		if(result == 0)
-			break;
-
-		deSerializer(&connList[n], buffer);					//разбираем строку по полям экземпляра массива структур
-
-		result = serverChecksumCalculateAndCompare(&connList[n], evListItem, buffer, crcServerResult);
-
-		//сравниваем присланный клиентом CRC-32 с подсчитанным нами CRC-32
-		if (result == 0) {
-			connList[n].timeout = time(NULL);
-			if(strcmp(connList[n].serviceName, firstServiceName) == 0) {
-				//в случае совпадения, выводим текст сообщения на печать и отправляем его обратно клиенту
-				printf("%s: %s\n", connList[n].clientNickName, connList[n].messageText);
-				firstServiceTCP(&connList[n], evListItem);
-			}
-			else if(strcmp(connList[n].serviceName, secondServiceName) == 0) {
-				//в случае совпадения, выводим текст сообщения на печать и отправляем его обратно клиенту
-				printf("%s: %s\n", connList[n].clientNickName, connList[n].messageText);
-				secondServiceTCP(&connList[n], evListItem);
-			}
-			else {
-				wrongServiceRequestedTCP(&connList[n], evListItem);
-				memset(&connList[n], 0, sizeof(connList[n]));
-				memset(&buffer, 0, sizeof(buffer));
-				memset(&crcServerResult, 0, strlen(crcServerResult)+1);
-				break;
-			}
+		else if(strcmp(connList[n].serviceName, secondServiceName) == 0) {
+			result = secondServiceUDP(serverSock, &connList[n], &clientAddr, clientAddrSize, buffer);
+			if(result < 0)
+				return result;
 		}
 		else {
-			perror("CRC"); //here must be write()
+			sendto(serverSock, wrongSrvNotification, strlen(wrongSrvNotification)+1, 0, &clientAddr, clientAddrSize);
+			memset(&connList[n], 0, sizeof(connList[n]));
+			return -11;
 		}
-
-		memset(&connList[n].messageText, 0, sizeof(connList[n].messageText));
-		memset(&connList[n].messageCRC32, 0, sizeof(connList[n].messageCRC32));
-		memset(&connList[n].length, 0, sizeof(connList[n].length));
-		memset(&buffer, 0, sizeof(buffer));
-		memset(&crcServerResult, 0, sizeof(crcServerResult));
 	}
-}
-
-void dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *evListItem) { //разобраться, что лучше использовать: evListItem or serverSocket
-	while(1) {
-		int n = -1;
-
-		struct sockaddr clientAddr;						//структура IP-адреса клиента
-		socklen_t clientAddrSize = sizeof(clientAddr);		//размер структуры адреса клиента
-
-		char buffer[BUFFERSIZE];							//буфер, принимающий сообщения от клиента
-		char crcServerResult[CRC32SIZE];					//буфер, в который помещается результат вычисления CRC-32
-		char clientName[32];							//буфер для хранения хостнейма подключившегося клиента
-
-		memset(&buffer, 0, sizeof(buffer));
-		memset(&crcServerResult, 0, sizeof(crcServerResult));
-		memset(&clientAddr, 0, sizeof(clientAddr));
-		memset(&clientName, 0, sizeof(clientName));
-
-		int result = recvfrom(serverSock, buffer, sizeof(buffer), 0, &clientAddr, &clientAddrSize);
-		getnameinfo(&clientAddr, clientAddrSize, clientName, sizeof(clientName), NULL, 0, 0);
-		if (result == -1) {
-			if(errno != EAGAIN)
-				perror("read");
-			break;
-		}
-
-		//если от клиента получено предупреждающее сообщение о том, что будут присланы сегменты строки
-		if(strncmp(buffer, segmentationWarning, strlen(segmentationWarning)) == 0) {
-			Assembler(serverSock, buffer, &clientAddr, clientAddrSize);					//вызываем функцию сборщика сегментов
-		}
-
-		n = identifySenderUDP(connList, buffer);
-
-		result = serverChecksumCalculateAndCompare(&connList[n], evListItem, buffer, crcServerResult);
-
-		//сравниваем присланный клиентом CRC-32 с подсчитанным нами CRC-32
-		if (result == 0) {
-			if(strcmp(connList[n].serviceName, firstServiceName) == 0) {
-				//в случае совпадения, выводим текст сообщения на печать и отправляем его обратно клиенту
-				printf("%s: %s\n", connList[n].clientNickName, connList[n].messageText);
-				firstServiceUDP(serverSock, &connList[n], &clientAddr, clientAddrSize);
-			}
-			else if(strcmp(connList[n].serviceName, secondServiceName) == 0) {
-				//в случае совпадения, выводим текст сообщения на печать и отправляем его обратно клиенту
-				printf("%s: %s\n", connList[n].clientNickName, connList[n].messageText);
-				secondServiceUDP(serverSock, &connList[n], &clientAddr, clientAddrSize);
-			}
-			else {
-				wrongServiceRequestedUDP(serverSock, &connList[n], &clientAddr, clientAddrSize);
-				memset(&connList[n], 0, sizeof(connList[n]));
-				memset(&buffer, 0, sizeof(buffer));
-				memset(&crcServerResult, 0, strlen(crcServerResult)+1);
-				break;
-			}
-		}
-		else {
-			//если контрольные суммы не совпали, уведомляем об этом клиента
-			sendto(serverSock, crcMissmatchNotification, strlen(crcMissmatchNotification)+1, 0, &clientAddr, sizeof(clientAddr));
-			perror("CRC"); //include response to client into perror() func
-		}
-
-		memset(&connList[n].messageText, 0, sizeof(connList[n].messageText));
-		memset(&connList[n].messageCRC32, 0, sizeof(connList[n].messageCRC32));
-		memset(&connList[n].length, 0, sizeof(connList[n].length));
-		memset(&buffer, 0, sizeof(buffer));
-		memset(&crcServerResult, 0, sizeof(crcServerResult));
+	else {
+		sendto(serverSock, crcMissmatchNotification, strlen(crcMissmatchNotification)+1, 0, &clientAddr, clientAddrSize);
+		return result;
 	}
+
+	memset(&connList[n].messageText, 0, sizeof(connList[n].messageText));
+	memset(&connList[n].messageCRC32, 0, sizeof(connList[n].messageCRC32));
+	memset(&connList[n].length, 0, sizeof(connList[n].length));
+	return 0;
 }

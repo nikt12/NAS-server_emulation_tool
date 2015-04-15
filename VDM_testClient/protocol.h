@@ -1,7 +1,7 @@
 #ifndef PROTOCOL_H_
 #define PROTOCOL_H_
 
-#define MTU 1500		//максимальный размер передаваемых данных
+#define MTU 15		//максимальный размер передаваемых данных
 #define TIMEOUT 30		//тайм-аут в секундах
 
 #define PROTO_NAME "NAS_SRV_EMULATOR"	//имя протокола

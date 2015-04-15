@@ -220,7 +220,7 @@ int sendMessageToServerUDP(int sockFD, connection *conn, struct sockaddr_in *ser
 		}
 	}
 	else {
-		result = sendto(sockFD, buffer, strlen(buffer), 0, serverAddr, serverAddrSize);
+		result = sendto(sockFD, buffer, strlen(buffer), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 		if (result == -1) {
 			perror("send");
 			return -1;
@@ -238,7 +238,7 @@ int recvMessageFromServerUDP(int sockFD, connection *conn, struct sockaddr_in *s
 
 	memset(&buffer, 0, sizeof(buffer));
 
-	result = recvfrom(sockFD, buffer, sizeof(buffer), 0, serverAddr, &serverAddrSize);
+	result = recvfrom(sockFD, buffer, sizeof(buffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize);
 	if (result == -1) {
 		perror("read");
 		return -1;
