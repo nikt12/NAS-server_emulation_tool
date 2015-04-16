@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <time.h>
+#include <syslog.h>
 #include "protocol.h"
 
 error errTable[20];
@@ -23,7 +24,9 @@ void handleErr(short errCode) {
 			n = i;
 			break;
 		}
-	fprintf(stderr, "%s", errTable[n].errDesc);
+	openlog("NAS-server-emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+	syslog(LOG_INFO, "%s", errTable[n].errDesc);
+	closelog();
 	if((abs(errCode) <= 6))
 		exit(EXIT_FAILURE);
 }

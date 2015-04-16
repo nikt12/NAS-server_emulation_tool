@@ -59,7 +59,9 @@ void timeoutCheck(connection *connList, struct epoll_event *evList) {
 	for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
 		timeout = time(NULL) - connList[j].timeout;
 		if((timeout > TIMEOUT) && (connList[j].clientHostName[0] != '\0')) {
-			printf("Timeout period for \"%s\" has experied.\n", connList[j].clientHostName);
+			openlog("NAS-server-emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+			syslog(LOG_INFO, "Timeout period for \"%s\" has experied.\n", connList[j].clientHostName);
+			closelog();
 			close(evList[j].data.fd);
 			memset(&connList[j], 0, sizeof(connList[j]));
 			break;
@@ -145,7 +147,9 @@ int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, 
 				event->data.fd = clientSocket;
 				event->events = EPOLLIN;
 				epoll_ctl(epollFD, EPOLL_CTL_ADD, clientSocket, event);
-				printf("Accepted connection on descriptor %d (hostname: %s)!\n", clientSocket, clientName);
+				openlog("NAS-server-emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+				syslog(LOG_INFO, "Accepted connection on descriptor %d (hostname: %s)!\n", clientSocket, clientName);
+				closelog();
 				break;
 			}
 			else
@@ -270,7 +274,9 @@ int dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
 		return 0;
 	}
 	if (result == 0) {
-		printf("Client \"%s\" (at %s) has closed the connection.\n", connList[n].clientNickName, connList[n].clientHostName);
+		openlog("NAS-server-emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+		syslog(LOG_INFO, "Client \"%s\" (at %s) has closed the connection.\n", connList[n].clientNickName, connList[n].clientHostName);
+		closelog();
 		close(evListItem->data.fd);
 		memset(&connList[n], 0, sizeof(connList[n]));
 		return 0;
@@ -380,15 +386,18 @@ int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *ev
 void sig_handler(int signum) {
 	switch (signum) {
 	case SIGINT:
-		printf("\nServer is closing...\n");
-		openlog("TestSignals", LOG_PID | LOG_CONS, LOG_DAEMON);
-		syslog(LOG_INFO, "DAEMON is off.");
+		//printf("\nServer is closing...\n");
+		openlog("NAS-server_emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+		syslog(LOG_INFO, "Daemon is off.");
 		closelog();
 		endEventLoop = 1;
 		endMainLoop = 1;
 		return;
 	case SIGHUP:
-		printf("\nReceived signal %d, GO TO HELL SIGHUP.\n", signum);
+		openlog("NAS-server-emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+		syslog(LOG_INFO, "Restarting daemon. Reloading config...");
+		closelog();
+		//printf("\nRestarting program. Reloading config...\n", signum);
 		endEventLoop = 1;
 		return;
 	}
