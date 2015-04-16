@@ -1,4 +1,6 @@
 #include <sys/types.h>
+#include <sys/param.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -29,6 +31,23 @@ void eventLoopTCP(connection *connList, int listeningSocket);
 void eventLoopUDP(connection *connList, int serverSock);
 
 int main(int argc, char *argv[]) {
+	printf("Running NAS-server_emulator in daemon mode...\n");
+
+	int fd;
+	struct rlimit flim;
+	if (getppid() != 1){
+		if(fork() != 0) exit(0);
+		setsid();
+	}
+
+	getrlimit(RLIMIT_NOFILE, &flim);
+	for(fd = 0; fd < flim.rlim_max; fd++)
+		close(fd);
+
+	openlog("NAS-server_emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+	syslog(LOG_INFO, "Daemon has started.");
+	closelog();
+
 	struct sigaction sa;
 	sigset_t newset;
 
@@ -56,10 +75,10 @@ int main(int argc, char *argv[]) {
 		config_init(&cfg);
 
 		if (!config_read_file(&cfg, "user_config.cfg")) {
-			fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
-			openlog("TestSignals", LOG_PID | LOG_CONS, LOG_DAEMON);
-				syslog(LOG_INFO, "Reading conf is crashed.");
-				closelog();
+			//fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg), config_error_line(&cfg), config_error_text(&cfg));
+			openlog("NAS-server_emulator", LOG_PID | LOG_CONS, LOG_DAEMON);
+			syslog(LOG_INFO, "Reading config is crashed.");
+			closelog();
 			config_destroy(&cfg);
 			return (EXIT_FAILURE);
 		}
@@ -67,20 +86,14 @@ int main(int argc, char *argv[]) {
 		 /*Поиск строчки port */
 		if (config_lookup_int(&cfg, "application.connectSocket.port", &port))
 			printf("Store port: %d\n", port);
-		else
-			fprintf(stderr, "No 'port' setting in configuration file.\n");
 
 		/* Поиск строчки transport */
 		if (config_lookup_string(&cfg, "application.connectSocket.transport", &transport))
 			printf("Store transport: %s\n", transport);
-		else
-			fprintf(stderr, "No 'transport' setting in configuration file.\n");
 
 		 /*Поиск строчки qlen */
 		if (config_lookup_int(&cfg, "application.connectSocket.qlen", &qlen))
 			printf("Store qlen: %d\n", qlen);
-		else
-			fprintf(stderr, "No 'qlen' setting in configuration file.\n");
 
 		listeningSocket = createServerSocket(port, transport, qlen);
 		if(listeningSocket < 0)
@@ -102,6 +115,7 @@ int main(int argc, char *argv[]) {
 				close(connList[i].clientSockFD);
 			}
 		close(listeningSocket);
+		config_destroy(&cfg);
 	}
 	while(!endMainLoop);
 	return 0;
