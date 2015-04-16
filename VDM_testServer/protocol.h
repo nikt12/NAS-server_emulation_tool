@@ -2,7 +2,7 @@
 #define PROTOCOL_H_
 
 #define MTU 1500			//максимальный размер передаваемых данных
-#define TIMEOUT 999		//тайм-аут в секундах
+#define TIMEOUT 100		//тайм-аут в секундах
 
 #define PROTO_NAME "NAS_SRV_EMULATOR"	//имя протокола
 #define PROTO_VER "0.1"					//версия прокола
@@ -28,6 +28,7 @@ extern const char secondSrvResponse[];
 extern const char wrongSrvNotification[];
 extern const char connStructOverflowNotification[];
 extern const char crcMissmatchNotification[];
+extern const char srvIsOffline[];
 
 //структура, описывающая соединение и его параметры
 typedef struct {

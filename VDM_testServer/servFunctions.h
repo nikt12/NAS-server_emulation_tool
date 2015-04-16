@@ -10,6 +10,8 @@
 
 extern error errTable[20];
 
+extern int endLoop;
+
 void errTableInit();
 
 void timeoutCheck(connection *connList, struct epoll_event *evList);
@@ -41,5 +43,7 @@ int secondServiceUDP(int serverSock, connection *connListItem, struct sockaddr *
 int dataExchangeTCP(connection *connList, struct epoll_event *evListItem);
 
 int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *evListItem);
+
+void sig_handler(int signum);
 
 #endif /* SERVFUNCTIONS_H_ */

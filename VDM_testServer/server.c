@@ -12,6 +12,8 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <time.h>
+#include <signal.h>
+#include <syslog.h>
 #include "crc.h"
 #include "protocol.h"
 #include "servFunctions.h"
@@ -26,7 +28,7 @@ void eventLoopTCP(connection *connList, int listeningSocket);
 void eventLoopUDP(connection *connList, int serverSock);
 
 int main(int argc, char *argv[]) {
-	int listeningSocket, result;
+	int listeningSocket, result, i;
 	connection connList[NUM_OF_CONNECTIONS];
 
 	memset(&connList, 0, sizeof(connList));
@@ -51,6 +53,15 @@ int main(int argc, char *argv[]) {
 	}
 	else
 		printf("Usage: %s port transport query_length\n", argv[0]);
+
+	for(i = 0; i < NUM_OF_CONNECTIONS; i++)
+		if(connList[i].clientNickName[0] != '\0') {
+			result = write(connList[i].clientSockFD, srvIsOffline, strlen(srvIsOffline));
+			if(result < 0)
+				return result;
+			close(connList[i].clientSockFD);
+		}
+	memset(&connList, 0, sizeof(connList));
 	return 0;
 }
 
@@ -58,6 +69,15 @@ void eventLoopTCP(connection *connList, int listeningSocket) {
 	int i, epollFD, readyFDs, result;
 	struct epoll_event event;
 	struct epoll_event evList[MAX_EPOLL_EVENTS];
+	struct sigaction sa;
+	sigset_t newset;
+
+	sigemptyset(&newset);
+	//sigaddset(&newset, SIGHUP);
+	sigprocmask(SIG_BLOCK, &newset, 0);
+	sa.sa_handler = sig_handler;
+	sigaction(SIGINT, &sa, 0);
+	sigaction(SIGHUP, &sa, 0);
 
 	event.events = EPOLLIN;
 	event.data.fd = listeningSocket;
@@ -65,7 +85,7 @@ void eventLoopTCP(connection *connList, int listeningSocket) {
 	epollFD = epoll_create(EPOLL_QUEUE_LEN);
 	epoll_ctl(epollFD, EPOLL_CTL_ADD, listeningSocket, &event);
 
-	while (1) {
+	while(!endLoop) {
 		readyFDs = epoll_wait(epollFD, evList, MAX_EPOLL_EVENTS, EPOLL_RUN_TIMEOUT);
 
 		timeoutCheck(connList, evList);

@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include "protocol.h"
+#include "clientFunctions.h"
 #include "crc.h"
 
 const char segmentationWarning[] = "SEGMENTATED_MESSAGES_WILL_COME:";
@@ -27,6 +28,7 @@ const char secondSrvResponse[] = " (response from service B)";
 const char wrongSrvNotification[] = "You have requested a non-existent service.";
 const char connStructOverflowNotification[] = "No more place for new clients.";
 const char crcMissmatchNotification[] = "Checksum missmatch.";
+const char srvIsOffline[] = "Server is offline now.";
 
 //реализация функции конвертирования данных структуры в строку для пересылки по сети
 //аргументы:

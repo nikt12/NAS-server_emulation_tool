@@ -37,13 +37,15 @@ void errTableInit() {
 	errTable[4].errDesc = "Error switching socket FD to blocking mode!\n";
 	errTable[5].errCode = -6;
 	errTable[5].errDesc = "There's no more place on the server!\n";
-	errTable[6].errCode = -7;
+	errTable[5].errCode = -7;
+	errTable[5].errDesc = "Server is offline. Closing program...\n";
+	errTable[6].errCode = -8;
 	errTable[6].errDesc = "You have requested wrong name of the service!\n";
-	errTable[7].errCode = -8;
+	errTable[7].errCode = -9;
 	errTable[7].errDesc = "Error sending message to the server!\n";
-	errTable[8].errCode = -9;
+	errTable[8].errCode = -10;
 	errTable[8].errDesc = "Error reading new message from the server!\n";
-	errTable[9].errCode = -10;
+	errTable[9].errCode = -11;
 	errTable[9].errDesc = "Error sending message by parts!\n";
 }
 
@@ -165,7 +167,7 @@ int sendMessageToServerTCP(int sockFD, connection *conn) {
 
 	result = write(sockFD, buffer, strlen(buffer));
 	if (result == -1)
-		return -8;
+		return -9;
 	else {
 		printf("Sent message: %s\n", conn->messageText);
 		return result;
@@ -180,12 +182,15 @@ int recvMessageFromServerTCP(int sockFD, connection *conn) {
 
 	result = read(sockFD, buffer, sizeof(buffer));
 	if (result == -1)
-		return -9;
+		return -10;
 	else {
 		if(strncmp(connStructOverflowNotification, buffer, strlen(buffer)+1) == 0)
 			return -6;
 
 		if(strcmp(wrongSrvNotification, buffer) == 0)
+			return -8;
+
+		if(strcmp(srvIsOffline, buffer) == 0)
 			return -7;
 
 		deSerializer(conn, buffer);
@@ -217,7 +222,7 @@ int sendMessageToServerUDP(int sockFD, connection *conn, struct sockaddr_in *ser
 	else {
 		result = sendto(sockFD, buffer, strlen(buffer), 0, (struct sockaddr *)serverAddr, serverAddrSize);
 		if (result == -1)
-			return -8;
+			return -9;
 		else {
 			printf("Sent message: %s\n", conn->messageText);
 			return result;
@@ -233,12 +238,15 @@ int recvMessageFromServerUDP(int sockFD, connection *conn, struct sockaddr_in *s
 
 	result = recvfrom(sockFD, buffer, sizeof(buffer), 0, (struct sockaddr *)serverAddr, &serverAddrSize);
 	if (result == -1)
-		return -9;
+		return -10;
 	else {
 		if(strncmp(connStructOverflowNotification, buffer, strlen(buffer)+1) == 0)
 			return -6;
 
 		if(strcmp(wrongSrvNotification, buffer) == 0)
+			return -8;
+
+		if(strcmp(srvIsOffline, buffer) == 0)
 			return -7;
 
 		deSerializer(conn, buffer);

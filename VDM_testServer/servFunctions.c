@@ -11,6 +11,8 @@
 #include <time.h>
 #include <errno.h>
 #include <ctype.h>
+#include <signal.h>
+#include <syslog.h>
 #include "crc.h"
 #include "protocol.h"
 #include "servFunctions.h"
@@ -18,6 +20,8 @@
 int errno;
 
 error errTable[20];
+
+int endLoop = 0;
 
 void errTableInit() {
 	errTable[0].errCode = -1;
@@ -371,4 +375,19 @@ int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *ev
 	memset(&connList[n].messageCRC32, 0, sizeof(connList[n].messageCRC32));
 	memset(&connList[n].length, 0, sizeof(connList[n].length));
 	return 0;
+}
+
+void sig_handler(int signum) {
+	switch (signum) {
+	case SIGINT:
+		printf("\nServer is closing...\n");
+		openlog("TestSignals", LOG_PID | LOG_CONS, LOG_DAEMON);
+					syslog(LOG_INFO, "DAEMON is off.");
+					closelog();
+		endLoop = 1;
+		return;
+	case SIGHUP:
+		printf("\nReceived signal %d, GO TO HELL SIGHUP.\n", signum);
+
+	}
 }
