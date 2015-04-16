@@ -10,7 +10,7 @@
 
 extern error errTable[20];
 
-extern int endLoop;
+extern int endEventLoop, endMainLoop;
 
 void errTableInit();
 
@@ -22,7 +22,7 @@ int checkArgs(char *port, char *transport);
 
 int fdSetBlocking(int fd, int blocking);
 
-int createServerSocket(const char *port, const char *transport, const char *qlen);
+int createServerSocket(int port, const char *transport, int qlen);
 
 int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, struct epoll_event *event);
 

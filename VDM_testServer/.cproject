@@ -4,9 +4,9 @@
 		<cconfiguration id="cdt.managedbuild.config.gnu.exe.debug.1414100371">
 			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.exe.debug.1414100371" moduleId="org.eclipse.cdt.core.settings" name="Debug">
 				<macros>
-					<stringMacro name="qlen" type="VALUE_TEXT" value="5"/>
-					<stringMacro name="port" type="VALUE_TEXT" value="49500"/>
 					<stringMacro name="trasport" type="VALUE_TEXT" value="tcp"/>
+					<stringMacro name="port" type="VALUE_TEXT" value="49500"/>
+					<stringMacro name="qlen" type="VALUE_TEXT" value="5"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -35,6 +35,9 @@
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1132451940" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.debug.1255110239" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.debug">
+								<option id="gnu.c.link.option.libs.1413992143" superClass="gnu.c.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" value="config"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.linker.input.1899524188" superClass="cdt.managedbuild.tool.gnu.c.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -119,4 +122,5 @@
 	<storageModule moduleId="refreshScope" versionNumber="1">
 		<resource resourceType="PROJECT" workspacePath="/TestServer"/>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 </cproject>

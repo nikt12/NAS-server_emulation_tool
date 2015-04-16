@@ -21,7 +21,7 @@ int errno;
 
 error errTable[20];
 
-int endLoop = 0;
+int endEventLoop = 0, endMainLoop = 0;
 
 void errTableInit() {
 	errTable[0].errCode = -1;
@@ -72,17 +72,17 @@ void timeoutCheck(connection *connList, struct epoll_event *evList) {
 //port - порт, с которым связывается сервер
 //transport - протокол, по которому будет работать сервер
 //qlen - длина очереди на подключение к сокету
-int createServerSocket(const char *port, const char *transport, const char *qlen) {
+int createServerSocket(int port, const char *transport, int qlen) {
 	struct sockaddr_in sin;			//структура IP-адреса
 	int s, result, type, proto, q_len, optval = 1;				//дескриптор и тип сокета
 
-	q_len = atoi(qlen);
+	//q_len = atoi(qlen);
 
 	memset(&sin, 0, sizeof(sin));
 
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
-	sin.sin_port = htons((unsigned short)atoi(port));
+	sin.sin_port = htons((unsigned short)port);
 
 	if(strcmp(transport, "udp") == 0) {
 		type = SOCK_DGRAM;
@@ -110,7 +110,7 @@ int createServerSocket(const char *port, const char *transport, const char *qlen
 		return -5;
 
 	if(type == SOCK_STREAM) {
-		result = listen(s, q_len);
+		result = listen(s, qlen);
 		if(result < 0)
 			return -6;
 	}
@@ -382,12 +382,14 @@ void sig_handler(int signum) {
 	case SIGINT:
 		printf("\nServer is closing...\n");
 		openlog("TestSignals", LOG_PID | LOG_CONS, LOG_DAEMON);
-					syslog(LOG_INFO, "DAEMON is off.");
-					closelog();
-		endLoop = 1;
+		syslog(LOG_INFO, "DAEMON is off.");
+		closelog();
+		endEventLoop = 1;
+		endMainLoop = 1;
 		return;
 	case SIGHUP:
 		printf("\nReceived signal %d, GO TO HELL SIGHUP.\n", signum);
-
+		endEventLoop = 1;
+		return;
 	}
 }
