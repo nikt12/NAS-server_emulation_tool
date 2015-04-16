@@ -13,41 +13,45 @@
 #include "crc.h"
 #include "protocol.h"
 #include "clientFunctions.h"
+#include "commonFunctions.h"
 
-void exchangeLoopTCP(connection *conn, int sockFD);
+int exchangeLoopTCP(connection *conn, int sockFD);
 
-void exchangeLoopUDP(connection *conn, int sockFD, struct sockaddr_in *serverAddr, socklen_t serverAddrSize);
+int exchangeLoopUDP(connection *conn, int sockFD, struct sockaddr_in *serverAddr, socklen_t serverAddrSize);
 
 int main(int argc, char *argv[]) {
-	int sockFD, portNo;
+	int sockFD, portNo, result;
 	connection conn;
 	struct sockaddr_in serverAddr;
 	socklen_t serverAddrSize;
 
-    //char buffer1[BUFFERSIZE];
-
 	//инициализируем используемые строки и структуры нулями
 	memset(&conn, 0, sizeof(conn));
 	memset(&serverAddr, 0, sizeof(serverAddr));
-	//memset(&buffer1, 0, sizeof(buffer1));
 
 	strcpy(conn.protoName, PROTO_NAME);
 	strcpy(conn.protoVersion, PROTO_VER);
 
+	errTableInit();
+
     //проверяем, получено ли необходимое количество аргументов
     if (argc == 4) {
-    	if(argCheck(argv[2], argv[3]) != 0)
-    		perror("wrong args");
+    	result = checkArgs(argv[2], argv[3]);
+		if(result < 0)
+			handleErr(result);
         //вызываем функцию создания сокета и подключения к хосту
     	sockFD = createClientSocket(argv[1], argv[2], argv[3]);
-
-    	if(strcmp(argv[3], "udp") == 0)
-        	printf("Client was started. Using UDP protocol!\n\n");
+    	if(sockFD < 0)
+    		handleErr(sockFD);
 
     	getClientInfo(&conn);
 
         if(strcmp(argv[3], "tcp") == 0) {
-        	exchangeLoopTCP(&conn, sockFD);
+        	while(1) {
+        		result = exchangeLoopTCP(&conn, sockFD);
+        		if(result < 0)
+        			handleErr(result);
+        	}
         }
         else {
             portNo = atoi(argv[2]);
@@ -55,68 +59,66 @@ int main(int argc, char *argv[]) {
         	serverAddr.sin_family = AF_INET;
         	inet_pton(AF_INET, argv[1], &serverAddr.sin_addr);
         	serverAddrSize = sizeof(serverAddr);
-        	exchangeLoopUDP(&conn, sockFD, &serverAddr, serverAddrSize);
+        	while(1) {
+        		result = exchangeLoopUDP(&conn, sockFD, &serverAddr, serverAddrSize);
+        		if(result < 0)
+        			handleErr(result);
+        	}
         }
-
-        // закрываем файловый дескриптор сокета
     	close(sockFD);
     }
     else
-    	//если введено неверное количество аргументов, выводим правильный формат запуска программы
     	printf("Usage: %s address port transport\n", argv[0]);
 
     return 0;
 }
 
-void exchangeLoopTCP(connection *conn, int sockFD) {
-    while(1) {
-    	if(getMessageText(conn) == -1)
-    		break;
+int exchangeLoopTCP(connection *conn, int sockFD) {
+	int result;
 
-    	sendMessageToServerTCP(sockFD, conn);
+	result = getMessageText(conn);
+	if(result < 0)
+		return result;
 
-		/*strncpy(buffer1, buffer, 20);
-		n = write(sockFD, buffer1, strlen(buffer1));
-		memset(&buffer1, 0, sizeof(buffer1));
-		int i, j;
-		for(i = 20, j = 0; i < 30; i++, j++)
-			buffer1[j]=buffer[i];
-		sleep(5);
-		n = write(sockFD, buffer1, strlen(buffer1));
-		memset(&buffer1, 0, sizeof(buffer1));
-		for(i = 30, j = 0; i < strlen(buffer); i++, j++)
-			buffer1[j]=buffer[i];
-		sleep(5);
-		n = write(sockFD, buffer1, strlen(buffer1));
-		memset(&buffer1, 0, sizeof(buffer1));*/
+	result = sendMessageToServerTCP(sockFD, conn);
+	if(result < 0)
+		return result;
 
-		//к этому моменту на стороне сервера наш сокет уже сделан неблокирующим, и, чтобы дождаться ответа
-		//от сервера, нужно вернуть его в блокирующий режим
-		fdSetBlocking(sockFD, 1);
+	fdSetBlocking(sockFD, 1);
+	if(sockFD < 0)
+		return -5;
 
-		if(recvMessageFromServerTCP(sockFD, conn) == -2)
-			break;
+	result = recvMessageFromServerTCP(sockFD, conn);
+	if(result < 0)
+		return result;
 
-		//возвращаем сокет в блокирующий режим для корректной работы сервера
-		fdSetBlocking(sockFD, 0);
-	}
+	fdSetBlocking(sockFD, 0);
+	if(sockFD < 0)
+		return -5;
+
+	return 0;
 }
 
-void exchangeLoopUDP(connection *conn, int sockFD, struct sockaddr_in *serverAddr, socklen_t serverAddrSize) {
-    while(1) {
-    	if(getMessageText(conn) == -1)
-    		break;
+int exchangeLoopUDP(connection *conn, int sockFD, struct sockaddr_in *serverAddr, socklen_t serverAddrSize) {
+	int result;
 
-		sendMessageToServerUDP(sockFD, conn, serverAddr, serverAddrSize);
+	result = getMessageText(conn);
+	if(result < 0)
+		return result;
 
-		//к этому моменту на стороне сервера наш сокет уже сделан неблокирующим, и, чтобы дождаться ответа
-		//от сервера, нужно вернуть его в блокирующий режим
-		fdSetBlocking(sockFD, 1);
+	result = sendMessageToServerUDP(sockFD, conn, serverAddr, serverAddrSize);
+	if(result < 0)
+		return result;
 
-		if(recvMessageFromServerUDP(sockFD, conn, serverAddr, serverAddrSize) == -2)
-			break;
+	fdSetBlocking(sockFD, 1);
+	if(sockFD < 0)
+		return -5;
 
-		//возвращаем сокет в блокирующий режим для корректной работы сервера
-		//fd_set_blocking(sockFD, 0);
-    }
+	result = recvMessageFromServerUDP(sockFD, conn, serverAddr, serverAddrSize);
+	if(result < 0)
+		return result;
+
+	//fd_set_blocking(sockFD, 0);
+
+	return 0;
 }

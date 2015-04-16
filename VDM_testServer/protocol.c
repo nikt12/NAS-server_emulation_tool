@@ -1,10 +1,3 @@
-/*
- * protocol.c
- *
- *  Created on: Apr 4, 2015
- *      Author: keinsword
- */
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -20,14 +13,14 @@
 #include <fcntl.h>
 #include <time.h>
 #include "protocol.h"
-//#include "servFunctions.h"
+#include "servFunctions.h"
 #include "crc.h"
 
-const char segmentationWarning[] = "SEGMENTATED_MESSAGES_WILL_COME:";	//формат предупреждающего сообщения
-const char ACK[] = "ACK";					//формат сообщения-подтверждения
+const char segmentationWarning[] = "SEGMENTATED_MESSAGES_WILL_COME:";
+const char ACK[] = "ACK";
 
-const char firstServiceName[] = "A";	//имя первого сервиса
-const char secondServiceName[] = "B";	//имя второго сервиса
+const char firstServiceName[] = "A";
+const char secondServiceName[] = "B";
 
 const char firstSrvResponse[] = " (response from service A)";
 const char secondSrvResponse[] = " (response from service B)";
@@ -35,21 +28,6 @@ const char secondSrvResponse[] = " (response from service B)";
 const char wrongSrvNotification[] = "You have requested a non-existent service.";
 const char connStructOverflowNotification[] = "No more place for new clients.";
 const char crcMissmatchNotification[] = "Checksum missmatch.";
-
-void timeoutCheck(connection *connList, struct epoll_event *evList) {
-	time_t timeout;
-	int j = 0;
-
-	for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
-		timeout = time(NULL) - connList[j].timeout;
-		if((timeout > TIMEOUT) && (connList[j].clientHostName[0] != '\0')) {
-			printf("Timeout period for \"%s\" has experied.\n", connList[j].clientHostName);
-			close(evList[j].data.fd);
-			memset(&connList[j], 0, sizeof(connList[j]));
-			break;
-		}
-	}
-}
 
 //реализация функции конвертирования данных структуры в строку для пересылки по сети
 //аргументы:
@@ -252,15 +230,15 @@ void Assembler(int sockFD, char *buffer, struct sockaddr *clientAddr, socklen_t 
 }
 
 void isMessageEntire(connection *connListItem, char *buffer) { //fix reading of the protocol signatures
-	char tempString[10];
+	char tempString[BUFFERSIZE];
 	memset(&tempString, 0, sizeof(tempString));
 
 	int i, j;
-	for(i = 0; i < 8; i++)
+	for(i = 0; i < 16; i++)
 		tempString[i] = buffer[i];
 	if(strncmp(tempString, PROTO_NAME, strlen(PROTO_NAME)) == 0) {
 		memset(&tempString, 0, sizeof(tempString));
-		for(i = 9, j = 0; i < 12; i++, j++)
+		for(i = 17, j = 0; i < 20; i++, j++)
 			tempString[j] = buffer[i];
 		if(strncmp(tempString, PROTO_VER, strlen(PROTO_VER)) == 0) {
 			memset(&tempString, 0, sizeof(tempString));
@@ -293,8 +271,21 @@ void Accumulator(connection *connListItem, char *buffer) {
 	}
 }
 
-void handleErr(const char *text, short errCode) {
-	perror(text);
-	if((abs(errCode) < 10))
-		exit(EXIT_FAILURE);
+int readingInParts(connection *connListItem, char *buffer) {
+	if(connListItem->segmentationFlag == 0) {
+		isMessageEntire(connListItem, buffer);
+		if(connListItem->segmentationFlag == 1) {
+			Accumulator(connListItem, buffer);
+			memset(&buffer, 0, sizeof(buffer));
+			return 0;
+		}
+	}
+	else {
+		Accumulator(connListItem, buffer);
+		if(connListItem->segmentationFlag == 1) {
+			memset(&buffer, 0, sizeof(buffer));
+			return 0;
+		}
+	}
+	return 1;
 }

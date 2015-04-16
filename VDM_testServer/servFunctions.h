@@ -8,12 +8,11 @@
 #ifndef SERVFUNCTIONS_H_
 #define SERVFUNCTIONS_H_
 
-typedef struct {
-	short errCode;
-	char *errDesc;
-}error;
-
 extern error errTable[20];
+
+void errTableInit();
+
+void timeoutCheck(connection *connList, struct epoll_event *evList);
 
 void strToLower(char *str);
 
@@ -28,8 +27,6 @@ int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, 
 int identifySenderTCP(connection *connList, struct epoll_event *evListItem);
 
 int identifySenderUDP(connection *connList, char *buffer);
-
-int readingInParts(connection *connListItem, char *buffer);
 
 int serverChecksumCalculateAndCompare(connection *connListItem, struct epoll_event *evListItem, char *buffer, char *crcServerResult);
 

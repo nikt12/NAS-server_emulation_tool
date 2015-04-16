@@ -1,8 +1,8 @@
 #ifndef PROTOCOL_H_
 #define PROTOCOL_H_
 
-#define MTU 15		//максимальный размер передаваемых данных
-#define TIMEOUT 30		//тайм-аут в секундах
+#define MTU 1500			//максимальный размер передаваемых данных
+#define TIMEOUT 999		//тайм-аут в секундах
 
 #define PROTO_NAME "NAS_SRV_EMULATOR"	//имя протокола
 #define PROTO_VER "0.1"					//версия прокола
@@ -45,6 +45,11 @@ typedef struct {
 	short segmentationFlag;
 } connection;
 
+typedef struct {
+	short errCode;
+	char *errDesc;
+}error;
+
 void Serializer(connection *connection, char *buffer);
 
 void deSerializer(connection *connListItem, char *buffer);
@@ -56,5 +61,7 @@ void Assembler(int sockFD, char *buffer, struct sockaddr *clientAddr, socklen_t 
 void isMessageEntire(connection *connListItem, char *buffer);
 
 void Accumulator(connection *connListItem, char *buffer);
+
+int readingInParts(connection *connListItem, char *buffer);
 
 #endif /* PROTOCOL_H_ */

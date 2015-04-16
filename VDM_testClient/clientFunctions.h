@@ -10,11 +10,9 @@
 
 extern const char exitpr[];
 
-void strToLower(char *str);
+extern error errTable[20];
 
-int argCheck(char *port, char *transport);
-
-int fdSetBlocking(int fd, int blocking);
+void errTableInit();
 
 int createClientSocket(const char *address, const char *port, const char *transport);
 

@@ -4,29 +4,26 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../client.c \
-../clientFunctions.c \
-../commonFunctions.c \
-../crc.c \
-../protocol.c 
+../src/client.c \
+../src/clientFunctions.c \
+../src/crc.c \
+../src/protocol.c 
 
 OBJS += \
-./client.o \
-./clientFunctions.o \
-./commonFunctions.o \
-./crc.o \
-./protocol.o 
+./src/client.o \
+./src/clientFunctions.o \
+./src/crc.o \
+./src/protocol.o 
 
 C_DEPS += \
-./client.d \
-./clientFunctions.d \
-./commonFunctions.d \
-./crc.d \
-./protocol.d 
+./src/client.d \
+./src/clientFunctions.d \
+./src/crc.d \
+./src/protocol.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
-%.o: ../%.c
+src/%.o: ../src/%.c
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C Compiler'
 	gcc -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"

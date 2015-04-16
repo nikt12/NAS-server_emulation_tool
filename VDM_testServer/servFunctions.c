@@ -1,10 +1,3 @@
-/*
- * servFunctions.c
- *
- *  Created on: Apr 4, 2015
- *      Author: keinsword
- */
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,12 +5,9 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/epoll.h>
-#include <pthread.h>
-#include <fcntl.h>
 #include <time.h>
 #include <errno.h>
 #include <ctype.h>
@@ -27,39 +17,50 @@
 
 int errno;
 
+error errTable[20];
+
 void errTableInit() {
+	errTable[0].errCode = -1;
+	errTable[0].errDesc = "Incorrect program arguments!\n";
+	errTable[1].errCode = -2;
+	errTable[1].errDesc = "Error creating the socket!\n";
+	errTable[2].errCode = -3;
+	errTable[2].errDesc = "Error switching socket FD to blocking mode!\n";
+	errTable[3].errCode = -4;
+	errTable[3].errDesc = "Error setting option to socket FD!\n";
+	errTable[4].errCode = -5;
+	errTable[4].errDesc = "Can't bind!\n";
+	errTable[5].errCode = -6;
+	errTable[5].errDesc = "Error switching socket to the listening state!\n";
+	errTable[6].errCode = -7;
+	errTable[6].errDesc = "Can't accept the connection with client!\n";
+	errTable[7].errCode = -8;
+	errTable[7].errDesc = "Can't accept the connection with client: no more place!\n";
+	errTable[8].errCode = -9;
+	errTable[8].errDesc = "Can't identify the client!\n";
+	errTable[9].errCode = -10;
+	errTable[9].errDesc = "Error reading new message from client!\n";
+	errTable[10].errCode = -11;
+	errTable[10].errDesc = "Checksum missmatch!\n";
+	errTable[11].errCode = -12;
+	errTable[11].errDesc = "Non-existing service was requested by the client!\n";
+	errTable[12].errCode = -13;
+	errTable[12].errDesc = "Error sending message!\n";
 }
 
+void timeoutCheck(connection *connList, struct epoll_event *evList) {
+	time_t timeout;
+	int j = 0;
 
-void strToLower(char *str) {
-	int i;
-	for(i = 0; str[i]; i++){
-	  str[i] = tolower(str[i]);
+	for(j = 0; j < NUM_OF_CONNECTIONS; j++) {
+		timeout = time(NULL) - connList[j].timeout;
+		if((timeout > TIMEOUT) && (connList[j].clientHostName[0] != '\0')) {
+			printf("Timeout period for \"%s\" has experied.\n", connList[j].clientHostName);
+			close(evList[j].data.fd);
+			memset(&connList[j], 0, sizeof(connList[j]));
+			break;
+		}
 	}
-}
-
-int checkArgs(char *port, char *transport) {
-	strToLower(transport);
-	if((atoi(port) < 1024) || (atoi(port) > 65535) || ((strcmp(transport, "udp") != 0) && (strcmp(transport, "tcp") != 0))) {
-		return -2;
-	}
-	return 0;
-}
-
-//реализация функции установки блокирующего/неблокирующего режима работы с файловым дескриптором
-//аргументы:
-//fd - файловый дескриптор сокета
-//blocking - режим работы (0 - неблокирующий, 1 - блокирующий)
-int fdSetBlocking(int fd, int blocking) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        return 0;
-
-    if (blocking)
-        flags &= ~O_NONBLOCK;
-    else
-        flags |= O_NONBLOCK;
-    return fcntl(fd, F_SETFL, flags) != -1;
 }
 
 //реализация функции создания и связывания сокета
@@ -90,24 +91,24 @@ int createServerSocket(const char *port, const char *transport, const char *qlen
 
 	s = socket(PF_INET, type, proto);
 	if (s < 0)
-		handleErr("Socket", s);
+		return -2;
 
 	fdSetBlocking(s, 0);
 	if (s < 0)
-		handleErr("Socket", s);
+		return -3;
 
 	result = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
 	if(result < 0)
-		handleErr("Set socket option", result);
+		return -4;
 
 	result = bind(s, (struct sockaddr *)&sin, sizeof(sin));
 	if(result < 0)
-		handleErr("Bind", result);
+		return -5;
 
 	if(type == SOCK_STREAM) {
 		result = listen(s, q_len);
 		if(result < 0)
-			handleErr("Listen", result);
+			return -6;
 	}
 	return s;
 }
@@ -126,7 +127,7 @@ int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, 
 		if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
 			return 0;
 		else
-			return -6;
+			return -7;
 	}
 	else {
 		int j;
@@ -146,7 +147,7 @@ int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, 
 			else
 				if(j == NUM_OF_CONNECTIONS-1) {
 					write(clientSocket, connStructOverflowNotification, strlen(connStructOverflowNotification));
-					return -7;
+					return -8;
 				}
 		}
 		return clientSocket;
@@ -154,7 +155,7 @@ int acceptNewConnection(int listeningSocket, connection *connList, int epollFD, 
 }
 
 int identifySenderTCP(connection *connList, struct epoll_event *evListItem) {
-	int i, n = -8;
+	int i, n = -9;
 	for (i = 0; i < NUM_OF_CONNECTIONS; i++)
 		if (evListItem->data.fd == connList[i].clientSockFD) {
 			n = i;
@@ -164,7 +165,7 @@ int identifySenderTCP(connection *connList, struct epoll_event *evListItem) {
 }
 
 int identifySenderUDP(connection *connList, char *buffer) {
-	int i, k, n = -8;
+	int i, k, n = -9;
 	connection tempConn[1];
 	memset(&tempConn, 0, sizeof(tempConn));
 	deSerializer(&tempConn[0], buffer);
@@ -188,25 +189,6 @@ int identifySenderUDP(connection *connList, char *buffer) {
 	return n;
 }
 
-int readingInParts(connection *connListItem, char *buffer) {
-	if(connListItem->segmentationFlag == 0) {
-		isMessageEntire(connListItem, buffer);
-		if(connListItem->segmentationFlag == 1) {
-			Accumulator(connListItem, buffer);
-			memset(&buffer, 0, sizeof(buffer));
-			return 0;
-		}
-	}
-	else {
-		Accumulator(connListItem, buffer);
-		if(connListItem->segmentationFlag == 1) {
-			memset(&buffer, 0, sizeof(buffer));
-			return 0;
-		}
-	}
-	return 1;
-}
-
 int serverChecksumCalculateAndCompare(connection *connListItem, struct epoll_event *evListItem, char *buffer, char *crcServerResult) {
 	unsigned int CRC;
 	char CRCmessage[BUFFERSIZE];
@@ -219,7 +201,7 @@ int serverChecksumCalculateAndCompare(connection *connListItem, struct epoll_eve
 	if (strcmp(connListItem->messageCRC32, crcServerResult) == 0)
 		return 0;
 	else
-		return -10;
+		return -11;
 }
 
 int firstServiceTCP(connection *connListItem, struct epoll_event *evListItem, char *buffer) {
@@ -229,7 +211,7 @@ int firstServiceTCP(connection *connListItem, struct epoll_event *evListItem, ch
 	Serializer(connListItem, buffer);
 	result = write(evListItem->data.fd, buffer, strlen(buffer));
 	if(result < 0)
-		return -12;
+		return -13;
 	return result;
 }
 
@@ -240,7 +222,7 @@ int firstServiceUDP(int serverSock, connection *connListItem, struct sockaddr *c
 	Serializer(connListItem, buffer);
 	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
 	if(result < 0)
-		return -12;
+		return -13;
 	return result;
 }
 
@@ -251,7 +233,7 @@ int secondServiceTCP(connection *connListItem, struct epoll_event *evListItem, c
 	Serializer(connListItem, buffer);
 	result = write(evListItem->data.fd, buffer, strlen(buffer));
 	if(result < 0)
-		return -12;
+		return -13;
 	return result;
 }
 
@@ -262,7 +244,7 @@ int secondServiceUDP(int serverSock, connection *connListItem, struct sockaddr *
 	Serializer(connListItem, buffer);
 	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
 	if(result < 0)
-		return -12;
+		return -13;
 	return result;
 }
 
@@ -280,7 +262,7 @@ int dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
 	int result = read(evListItem->data.fd, buffer, sizeof(buffer));
 	if (result == -1) {
 		if(errno != EAGAIN)
-			return -9;
+			return -10;
 		return 0;
 	}
 	if (result == 0) {
@@ -292,7 +274,7 @@ int dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
 
 	result = readingInParts(&connList[n], buffer);		//fix reading in parts
 	if(result == 0)
-		return 0;
+		return 0; //some err code should be here
 
 	deSerializer(&connList[n], buffer);
 
@@ -316,7 +298,7 @@ int dataExchangeTCP(connection *connList, struct epoll_event *evListItem) {
 			write(evListItem->data.fd, wrongSrvNotification, strlen(wrongSrvNotification)+1);
 			close(evListItem->data.fd);
 			memset(&connList[n], 0, sizeof(connList[n]));
-			return -11;
+			return -12;
 		}
 	}
 	else {
@@ -347,7 +329,7 @@ int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *ev
 	getnameinfo(&clientAddr, clientAddrSize, clientName, sizeof(clientName), NULL, 0, 0);
 	if (result == -1) {
 		if(errno != EAGAIN)
-			return -9;
+			return -10;
 		return 0;
 	}
 
@@ -377,7 +359,7 @@ int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *ev
 		else {
 			sendto(serverSock, wrongSrvNotification, strlen(wrongSrvNotification)+1, 0, &clientAddr, clientAddrSize);
 			memset(&connList[n], 0, sizeof(connList[n]));
-			return -11;
+			return -12;
 		}
 	}
 	else {

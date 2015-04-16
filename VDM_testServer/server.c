@@ -15,6 +15,7 @@
 #include "crc.h"
 #include "protocol.h"
 #include "servFunctions.h"
+#include "commonFunctions.h"
 
 #define EPOLL_QUEUE_LEN 100
 #define MAX_EPOLL_EVENTS 100
@@ -30,17 +31,21 @@ int main(int argc, char *argv[]) {
 
 	memset(&connList, 0, sizeof(connList));
 
+	errTableInit();
+
 	if (argc == 4) {
 		result = checkArgs(argv[1], argv[2]);
 		if(result != 0)
-			handleErr("Wrong arguments!", result);
+			handleErr(result);
 		listeningSocket = createServerSocket(argv[1], argv[2], argv[3]);
+		if(listeningSocket < 0)
+			handleErr(listeningSocket);
 		if(strcmp(argv[2], "tcp") == 0) {
-			printf("Waiting for connections... Listening on %s:%s...\n", argv[1], argv[2]);
+			printf("Waiting for connections... Listening on port %s with queue length %s...\n", argv[1], argv[3]);
 			eventLoopTCP(connList, listeningSocket);
 		}
 		else {
-			printf("Using UDP protocol. Waiting for connections (%s:%s)...\n", argv[1], argv[2]);
+			printf("Using UDP protocol. Waiting for connections on port %s with queue length %s...\n", argv[1], argv[2]);
 			eventLoopUDP(connList, listeningSocket);
 		}
 	}
@@ -50,14 +55,14 @@ int main(int argc, char *argv[]) {
 }
 
 void eventLoopTCP(connection *connList, int listeningSocket) {
-	int i, readyFDs, result;
-	int epollFD = epoll_create(EPOLL_QUEUE_LEN);
+	int i, epollFD, readyFDs, result;
 	struct epoll_event event;
 	struct epoll_event evList[MAX_EPOLL_EVENTS];
 
 	event.events = EPOLLIN;
 	event.data.fd = listeningSocket;
 
+	epollFD = epoll_create(EPOLL_QUEUE_LEN);
 	epoll_ctl(epollFD, EPOLL_CTL_ADD, listeningSocket, &event);
 
 	while (1) {
@@ -70,7 +75,7 @@ void eventLoopTCP(connection *connList, int listeningSocket) {
 				while(1) {
 					result = acceptNewConnection(listeningSocket, connList, epollFD, &event);
 					if(result < 0)
-						handleErr("Exchange", result);
+						handleErr(result);
 					break;
 				}
 			}
@@ -78,7 +83,7 @@ void eventLoopTCP(connection *connList, int listeningSocket) {
 				while(1) {
 					result = dataExchangeTCP(connList, &evList[i]);
 					if(result < 0)
-						handleErr("Exchange", result);
+						handleErr(result);
 					break;
 				}
 			}
@@ -106,7 +111,7 @@ void eventLoopUDP(connection *connList, int serverSock) {
 				while(1) {
 					result = dataExchangeUDP(serverSock, connList, &evList[i]);
 					if(result < 0)
-						handleErr("Exchange", result);
+						handleErr(result);
 					break;
 				}
 			}

@@ -4,18 +4,21 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../commonFunctions.c \
 ../crc.c \
 ../protocol.c \
 ../servFunctions.c \
 ../server.c 
 
 OBJS += \
+./commonFunctions.o \
 ./crc.o \
 ./protocol.o \
 ./servFunctions.o \
 ./server.o 
 
 C_DEPS += \
+./commonFunctions.d \
 ./crc.d \
 ./protocol.d \
 ./servFunctions.d \
