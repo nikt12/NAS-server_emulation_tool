@@ -170,3 +170,44 @@ void eventLoopUDP(connection *connList, int serverSock) {
 			}
 	}
 }
+
+void checkIpStack(config_t cfg, char *checkName, char *checkAddr)
+{
+	config_setting_t *ipsets;
+	ipsets = config_lookup(&cfg, "services.ipsets"); //read ipsets
+
+	if(ipsets != NULL)
+	{
+		int count = config_setting_length(ipsets); //get number for ipsets
+		int i, n;
+
+		for (i = 0; i < count; ++i) //go over ipsets
+		{
+			config_setting_t *ipset = config_setting_get_elem(ipsets, i); //take ipset #i
+
+			char name;
+			config_setting_t *ipaddresses;
+			char addr;
+
+			if(!(config_setting_lookup_string(ipset, "name", &name)) // check if can read name
+				&& (ipaddresses = config_lookup(ipset, "addresses"))) // check if can read addresses
+			{
+				if(checkName == name) // check if name of service is matching
+				{
+					printf("Name of service is matching".);
+					int count_n = config_setting_length(ipaddresses); // get number of addresses
+
+					for (n = 0; n < count_n;++ n) // go-over-addresses
+					{
+						addr = config_setting_get_string_elem(ipaddresses, n); // get address #n
+						if (checkAddr == addr) // check if address is matching with given
+						{
+							printf("Address is matching.");
+						}
+					}
+				}
+				continue; // next ipset
+			} // end of ipset checker
+		} // end of go-over-sets loop
+	} // end of ipsets checker
+} // end of void
