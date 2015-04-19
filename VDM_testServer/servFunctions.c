@@ -405,7 +405,7 @@ void sig_handler(int signum) {
 }
 
 /* imagine that we have cfg, name, address */
-void checkIpStack(config_t *cfg,const char *checkName, char *checkAddr)
+void checkIpStack(config_t *cfg,const char *checkName,const char *checkAddr)
 {
 	config_setting_t *ipset;
 	const char *DEFAULT_SERVICES_PATH = "application.services.";
@@ -422,9 +422,9 @@ void checkIpStack(config_t *cfg,const char *checkName, char *checkAddr)
 		int i;
 		for (i = 0; i < count; ++i) //go over ips
 		{
-			char *addr = config_setting_get_string_elem(ipset, i); //take ip #i and compare with given
+			const char *addr = config_setting_get_string_elem(ipset, i); //take ip #i and compare with given
 			printf("%s\n", addr);
-			if (&addr == &checkAddr)
+			if (!strcmp(addr,checkAddr))
 			{
 				printf("Right address found!");
 				break;
