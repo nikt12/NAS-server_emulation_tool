@@ -408,23 +408,21 @@ void sig_handler(int signum) {
 void checkIpStack(config_t *cfg,const char *checkName,const char *checkAddr)
 {
 	config_setting_t *ipset;
-	const char *DEFAULT_SERVICES_PATH = "application.services.";
-	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName));
-	strcpy(ipset_path, DEFAULT_SERVICES_PATH);
-	strcat(ipset_path, checkName);
-	strcat(ipset_path, ".addresses");
+	const char *DEFAULT_SERVICES_PATH = "application.services."; //constant for services in cfg
+	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName)); // make address for desired service
+	strcpy(ipset_path, DEFAULT_SERVICES_PATH); // add DEFAULT_SERVICES_PATH
+	strcat(ipset_path, checkName); // add name of service
+	strcat(ipset_path, ".addresses"); // path to addresses array
 	ipset = config_lookup(cfg, ipset_path); //read service, if exists
 
 	if(ipset != NULL) // if ipset isn't empty
 	{
 		int count = config_setting_length(ipset); //get number of ips
-		printf("I have %d entries:\n", count);
 		int i;
 		for (i = 0; i < count; ++i) //go over ips
 		{
 			const char *addr = config_setting_get_string_elem(ipset, i); //take ip #i and compare with given
-			printf("%s\n", addr);
-			if (!strcmp(addr,checkAddr))
+			if (!strcmp(addr,checkAddr)) //check if addresses match
 			{
 				printf("Right address found!");
 				break;
