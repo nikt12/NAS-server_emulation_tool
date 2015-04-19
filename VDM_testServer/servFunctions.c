@@ -404,37 +404,34 @@ void sig_handler(int signum) {
 	}
 }
 
-/* imagine that we have cfg, name, address */
-void checkIpStack(config_t *cfg,const char *checkName,const char *checkAddr)
+/* imagine that we have cfg, and client asks for service through  interface */
+int checkIpStack(config_t *cfg,const char *serverInterface, const char *serviceName) // check if service is allowed through given interface
 {
 	config_setting_t *ipset;
 	const char *DEFAULT_SERVICES_PATH = "application.services."; //constant for services in cfg
-	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName) + strlen(".addresses")); // make address for desired service
+	char *ipset_path = (char *) malloc(100); // make address for desired service
 	strcpy(ipset_path, DEFAULT_SERVICES_PATH); // add DEFAULT_SERVICES_PATH
-	strcat(ipset_path, checkName); // add name of service
-	strcat(ipset_path, ".addresses"); // path to addresses array
-	ipset = config_lookup(cfg, ipset_path); //read service, if exists
+	strcat(ipset_path, serverInterface); // add name of interface
+	strcat(ipset_path, ".serviceNames"); //read service, if exists
 
 	if(ipset != NULL) // if ipset isn't empty
 	{
-		int count = config_setting_length(ipset); //get number of ips
+		int count = config_setting_length(ipset); //get number of services
 		int i;
-		for (i = 0; i < count; ++i) //go over ips
+		for (i = 0; i < count; ++i) //go over services on interface
 		{
-			const char *addr = config_setting_get_string_elem(ipset, i); //take ip #i and compare with given
-			if (!strcmp(addr,checkAddr)) //check if addresses match
+			const char *service= config_setting_get_string_elem(ipset, i); //take service #i from cfg and compare with given
+			if (!strcmp(service,serviceName)) //check if asked and taken services match
 			{
-				printf("Right address found!");
-				break;
+				return 1; // service is found
 			}
-			continue; // go to next ip
-		} // end of go-over-ips loop
+			continue; // go to next service
+		} // end of go-over-services loop
 	}
 	else
 	{
-		printf("Service with that name cannot be found");
+		return 0; // interface is not found
 	}
 	free(ipset_path);
-	return;
-	// end of ipset checker
-} // end of void
+	return 0; // service is not found
+} // end of function

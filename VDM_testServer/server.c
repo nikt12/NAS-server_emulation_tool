@@ -28,8 +28,6 @@ void eventLoopTCP(connection *connList, int listeningSocket);
 
 void eventLoopUDP(connection *connList, int serverSock);
 
-void checkIpStack(config_t *cfg, const char *checkName, const char *checkAddr);
-
 int main(int argc, char *argv[]) {
 	struct sigaction sa;
 	sigset_t newset;

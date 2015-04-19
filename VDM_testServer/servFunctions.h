@@ -46,4 +46,6 @@ int dataExchangeUDP(int serverSock, connection *connList, struct epoll_event *ev
 
 void sig_handler(int signum);
 
+int checkIpStack(config_t *cfg,const char *serverInterface, const char *serviceName);
+
 #endif /* SERVFUNCTIONS_H_ */
