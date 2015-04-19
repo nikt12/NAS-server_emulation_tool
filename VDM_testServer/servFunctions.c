@@ -228,6 +228,7 @@ int firstServiceUDP(int serverSock, connection *connListItem, struct sockaddr *c
 	int result;
 	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
 	strcat(connListItem->messageText, firstSrvResponse);
+	checkIpStack(clientAddr->sa_data, connListItem->serviceName);
 	Serializer(connListItem, buffer);
 	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
 	if(result < 0)
@@ -250,6 +251,7 @@ int secondServiceUDP(int serverSock, connection *connListItem, struct sockaddr *
 	int result;
 	printf("%s: %s\n", connListItem->clientNickName, connListItem->messageText);
 	strcat(connListItem->messageText, secondSrvResponse);
+	checkIpStack(clientAddr->sa_data, connListItem->serviceName);
 	Serializer(connListItem, buffer);
 	result = sendto(serverSock, buffer, strlen(buffer), 0, clientAddr, clientAddrSize);
 	if(result < 0)
@@ -405,7 +407,7 @@ void sig_handler(int signum) {
 }
 
 /* imagine that we have cfg, and client asks for service through  interface */
-int checkIpStack(config_t *cfg,const char *serverInterface, const char *serviceName) // check if service is allowed through given interface
+int checkIpStack(const char *serverInterface, const char *serviceName) // check if service is allowed through given interface
 {
 	config_setting_t *ipset;
 	const char *DEFAULT_SERVICES_PATH = "application.services."; //constant for services in cfg
