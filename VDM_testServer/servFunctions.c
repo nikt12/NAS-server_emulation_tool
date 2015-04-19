@@ -409,7 +409,7 @@ void checkIpStack(config_t *cfg,const char *checkName,const char *checkAddr)
 {
 	config_setting_t *ipset;
 	const char *DEFAULT_SERVICES_PATH = "application.services."; //constant for services in cfg
-	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName)); // make address for desired service
+	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName) + strlen(".addresses")); // make address for desired service
 	strcpy(ipset_path, DEFAULT_SERVICES_PATH); // add DEFAULT_SERVICES_PATH
 	strcat(ipset_path, checkName); // add name of service
 	strcat(ipset_path, ".addresses"); // path to addresses array
@@ -434,5 +434,7 @@ void checkIpStack(config_t *cfg,const char *checkName,const char *checkAddr)
 	{
 		printf("Service with that name cannot be found");
 	}
+	free(ipset_path);
+	return;
 	// end of ipset checker
 } // end of void
