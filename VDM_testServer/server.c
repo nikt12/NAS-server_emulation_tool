@@ -84,10 +84,6 @@ int main(int argc, char *argv[]) {
 		else
 			fprintf(stderr, "No 'qlen' setting in configuration file.\n");
 
-		const char *service = "A";
-		const char *address = "192.168.1.1";
-		checkIpStack(&cfg, service, address);
-
 		listeningSocket = createServerSocket(port, transport, qlen);
 		if(listeningSocket < 0)
 			handleErr(listeningSocket);
