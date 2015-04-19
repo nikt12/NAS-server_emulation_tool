@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <syslog.h>
+#include <libconfig.h>
 #include "crc.h"
 #include "protocol.h"
 #include "servFunctions.h"
@@ -402,3 +403,38 @@ void sig_handler(int signum) {
 		return;
 	}
 }
+
+/* imagine that we have cfg, name, address */
+void checkIpStack(config_t *cfg,const char *checkName, char *checkAddr)
+{
+	config_setting_t *ipset;
+	const char *DEFAULT_SERVICES_PATH = "application.services.";
+	char *ipset_path = (char *) malloc(1 + strlen(DEFAULT_SERVICES_PATH) + strlen(checkName));
+	strcpy(ipset_path, DEFAULT_SERVICES_PATH);
+	strcat(ipset_path, checkName);
+	strcat(ipset_path, ".addresses");
+	ipset = config_lookup(cfg, ipset_path); //read service, if exists
+
+	if(ipset != NULL) // if ipset isn't empty
+	{
+		int count = config_setting_length(ipset); //get number of ips
+		printf("I have %d entries:\n", count);
+		int i;
+		for (i = 0; i < count; ++i) //go over ips
+		{
+			char *addr = config_setting_get_string_elem(ipset, i); //take ip #i and compare with given
+			printf("%s\n", addr);
+			if (&addr == &checkAddr)
+			{
+				printf("Right address found!");
+				break;
+			}
+			continue; // go to next ip
+		} // end of go-over-ips loop
+	}
+	else
+	{
+		printf("Service with that name cannot be found");
+	}
+	// end of ipset checker
+} // end of void
