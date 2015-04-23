@@ -410,8 +410,9 @@ void sig_handler(int signum) {
 int checkIpStack(const char *serverInterface, const char *serviceName) // check if service is allowed through given interface
 {
 	config_setting_t *ipset;
-	const char *DEFAULT_SERVICES_PATH = "application.services."; //constant for services in cfg
-	char *ipset_path = (char *) malloc(100); // make address for desired service
+	char defaultServucesPath[25] = "application.services."; //constant for services in cfg,(why we need const char *???)
+	//char *ipset_path = (char *) malloc(100); // make address for desired service, (we really don't need this)
+	char ipsetPath[100];
 	strcpy(ipset_path, DEFAULT_SERVICES_PATH); // add DEFAULT_SERVICES_PATH
 	strcat(ipset_path, serverInterface); // add name of interface
 	strcat(ipset_path, ".serviceNames"); //read service, if exists
@@ -420,7 +421,7 @@ int checkIpStack(const char *serverInterface, const char *serviceName) // check 
 	{
 		int count = config_setting_length(ipset); //get number of services
 		int i;
-		for (i = 0; i < count; ++i) //go over services on interface
+		for (i = 0; i < count; i++) //go over services on interface(i use damn i++)
 		{
 			const char *service= config_setting_get_string_elem(ipset, i); //take service #i from cfg and compare with given
 			if (!strcmp(service,serviceName)) //check if asked and taken services match
@@ -432,8 +433,7 @@ int checkIpStack(const char *serverInterface, const char *serviceName) // check 
 	}
 	else
 	{
-		return 0; // interface is not found
+		return 0; // if ip set is NULL
 	}
-	free(ipset_path);
-	return 0; // service is not found
+	return 2; // service is not found
 } // end of function
